@@ -1,7 +1,17 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import Tarea
 from django.contrib.auth.models import User
 import re
+
+
+class FocusflowTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        user = self.user
+        full = (user.get_full_name() or "").strip()
+        data["nombre_mostrar"] = full if full else user.username
+        return data
 
 
 # Serializador para crear tareas

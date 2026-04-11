@@ -1,11 +1,16 @@
 from rest_framework import viewsets, status, generics, permissions
-from focusflow.serializer import TareaSerializer, RegistroSerializer
+from focusflow.serializer import TareaSerializer, RegistroSerializer, FocusflowTokenObtainPairSerializer
 from .models import Tarea
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
+
+
+class FocusflowTokenObtainPairView(TokenObtainPairView):
+    serializer_class = FocusflowTokenObtainPairSerializer
 
 #VISTA LOGIN
 class VistaLoginPersonalizada(APIView):
