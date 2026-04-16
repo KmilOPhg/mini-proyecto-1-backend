@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status, generics, permissions
 from focusflow.serializer import TareaSerializer, RegistroSerializer, FocusflowTokenObtainPairSerializer
 from .models import Tarea
+from .carga_service import build_resumen, fecha_efectiva_plan
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -71,6 +72,29 @@ class VistaRegistro(generics.CreateAPIView):
             "errores": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
 
+def _payload_carga_tras_tarea(user, tarea):
+    if tarea.parent_id:
+        return None, None
+    day = fecha_efectiva_plan(tarea)
+    resumen = build_resumen(user, day)
+    alerta = None
+    if resumen["estado_carga"] == "overload":
+        alerta = {
+            "tipo": "overload",
+            "mensaje": (
+                f"Hoy tienes {resumen['total_minutos_planificados']} min planificados "
+                f"y tu límite es {resumen['limite_minutos']} min "
+                f"({resumen['exceso_minutos']} min de más)."
+            ),
+        }
+    elif resumen["estado_carga"] == "warning":
+        alerta = {
+            "tipo": "warning",
+            "mensaje": "Estás cerca del límite de carga de hoy; valora repartir o acortar estimaciones.",
+        }
+    return resumen, alerta
+
+
 # VISTA TAREAS PROTEGIDA
 class VistaTarea(viewsets.ModelViewSet):
     serializer_class = TareaSerializer
@@ -94,10 +118,17 @@ class VistaTarea(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             self.perform_create(serializer)
-            return Response({
-                "mensaje": "¡Tarea creada exitosamente!",
-                "data": serializer.data
-            }, status=status.HTTP_201_CREATED)
+            inst = serializer.instance
+            resumen, alerta = _payload_carga_tras_tarea(request.user, inst)
+            return Response(
+                {
+                    "mensaje": "¡Tarea creada exitosamente!",
+                    "data": serializer.data,
+                    "resumen_dia": resumen,
+                    "carga_alerta": alerta,
+                },
+                status=status.HTTP_201_CREATED,
+            )
 
         return Response({
             "mensaje": "Error al validar los datos de la tarea",
@@ -112,10 +143,17 @@ class VistaTarea(viewsets.ModelViewSet):
 
         if serializer.is_valid():
             self.perform_update(serializer)
-            return Response({
-                "mensaje": "Tarea actualizada correctamente",
-                "data": serializer.data
-            }, status=status.HTTP_200_OK)
+            inst = serializer.instance
+            resumen, alerta = _payload_carga_tras_tarea(request.user, inst)
+            return Response(
+                {
+                    "mensaje": "Tarea actualizada correctamente",
+                    "data": serializer.data,
+                    "resumen_dia": resumen,
+                    "carga_alerta": alerta,
+                },
+                status=status.HTTP_200_OK,
+            )
 
         return Response({
             "mensaje": "Error en la actualización de la tarea",

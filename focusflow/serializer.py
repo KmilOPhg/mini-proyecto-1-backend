@@ -1,6 +1,12 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import Tarea
+from .carga_constants import (
+    DURACION_TAREA_MAX_MINUTOS,
+    DURACION_TAREA_MIN_MINUTOS,
+    LIMITE_DIARIO_MAX_MINUTOS,
+    LIMITE_DIARIO_MIN_MINUTOS,
+)
+from .models import Tarea, PerfilCarga
 from django.contrib.auth.models import User
 import re
 
@@ -14,6 +20,28 @@ class FocusflowTokenObtainPairSerializer(TokenObtainPairSerializer):
         return data
 
 
+class PerfilCargaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PerfilCarga
+        fields = ("limite_minutos_diario", "advertencia_umbral_pct")
+
+    def validate_limite_minutos_diario(self, value):
+        if value < LIMITE_DIARIO_MIN_MINUTOS:
+            raise serializers.ValidationError(
+                f"El límite mínimo es {LIMITE_DIARIO_MIN_MINUTOS} minutos (0,5 h)."
+            )
+        if value > LIMITE_DIARIO_MAX_MINUTOS:
+            raise serializers.ValidationError(
+                "El límite diario no puede superar 6 horas (360 minutos)."
+            )
+        return value
+
+    def validate_advertencia_umbral_pct(self, value):
+        if value < 50 or value > 100:
+            raise serializers.ValidationError("El umbral de aviso debe estar entre 50 y 100.")
+        return value
+
+
 # Serializador para crear tareas
 class TareaSerializer(serializers.ModelSerializer):
     # Esto mostrará la lista de subtareas dentro de cada tarea
@@ -22,6 +50,19 @@ class TareaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tarea
         fields = '__all__'
+
+    def validate_duracion_estimada_minutos(self, value):
+        if value is None:
+            return value
+        if value < DURACION_TAREA_MIN_MINUTOS:
+            raise serializers.ValidationError(
+                f"La duración mínima es {DURACION_TAREA_MIN_MINUTOS} minutos."
+            )
+        if value > DURACION_TAREA_MAX_MINUTOS:
+            raise serializers.ValidationError(
+                "La duración estimada no puede superar 6 horas (360 minutos), igual que el límite diario máximo."
+            )
+        return value
 
     # subtareas = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
 

@@ -1,6 +1,43 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
+
+from .carga_constants import (
+    DURACION_TAREA_MAX_MINUTOS,
+    DURACION_TAREA_MIN_MINUTOS,
+    LIMITE_DIARIO_MAX_MINUTOS,
+    LIMITE_DIARIO_MIN_MINUTOS,
+)
+
+
+class PerfilCarga(models.Model):
+    """Límite diario configurable por usuario (Sprint 3)."""
+
+    usuario = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="perfil_carga",
+    )
+    limite_minutos_diario = models.PositiveIntegerField(
+        default=360,
+        validators=[
+            MinValueValidator(LIMITE_DIARIO_MIN_MINUTOS),
+            MaxValueValidator(LIMITE_DIARIO_MAX_MINUTOS),
+        ],
+        help_text="Carga máxima planificable por día (30–360 min; máximo 6 h).",
+    )
+    advertencia_umbral_pct = models.PositiveSmallIntegerField(
+        default=85,
+        help_text="Porcentaje del límite a partir del cual se muestra aviso (no bloqueante).",
+    )
+
+    class Meta:
+        verbose_name = "Perfil de carga"
+        verbose_name_plural = "Perfiles de carga"
+
+    def __str__(self):
+        return f"Carga {self.usuario.username}: {self.limite_minutos_diario} min/día"
 
 
 class Tarea(models.Model):
@@ -11,6 +48,11 @@ class Tarea(models.Model):
         TALLER = 'TA', 'Taller'
         PROYECTO = 'PR', 'Proyecto'
         OTRO = 'OT', 'Otro'
+
+    class Prioridad(models.TextChoices):
+        BAJA = 'BAJA', 'Baja'
+        MEDIA = 'MEDIA', 'Media'
+        ALTA = 'ALTA', 'Alta'
 
     nombre = models.CharField(max_length=100, help_text="El nombre descriptivo de la tarea")
     descripcion = models.CharField(max_length=100, null=True, blank=True, help_text="La descripción de la tarea")
@@ -28,6 +70,25 @@ class Tarea(models.Model):
     )
 
     curso = models.CharField(default="Sin definir",  max_length=255, help_text="Casilla para el curso")
+
+    fecha_planificada = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Día en que planeas trabajar esta tarea (si vacío, se usa la fecha de entrega).",
+    )
+    duracion_estimada_minutos = models.PositiveIntegerField(
+        default=60,
+        validators=[
+            MinValueValidator(DURACION_TAREA_MIN_MINUTOS),
+            MaxValueValidator(DURACION_TAREA_MAX_MINUTOS),
+        ],
+        help_text="Tiempo estimado de trabajo en minutos (15–360; no más que 6 h).",
+    )
+    prioridad = models.CharField(
+        max_length=8,
+        choices=Prioridad.choices,
+        default=Prioridad.MEDIA,
+    )
 
     parent = models.ForeignKey(
         'self',
