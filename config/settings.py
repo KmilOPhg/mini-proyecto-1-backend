@@ -125,9 +125,25 @@ SIMPLE_JWT = {
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'FocusFlow API',
-    'DESCRIPTION': 'Documentación de tareas y subtareas',
+    'DESCRIPTION': (
+        'API REST de FocusFlow: **JWT**, tareas con subtareas, y **carga diaria** (Sprint 3).\n\n'
+        '**Base URL del prefijo:** las rutas bajo `config.urls` incluyen el segmento `/tareas/` '
+        '(ej. en local: `http://127.0.0.1:8000/tareas/api/...`). El frontend suele definir '
+        '`VITE_API_URL` apuntando a ese prefijo (p. ej. `http://127.0.0.1:8000/tareas`).\n\n'
+        '**Autorización:** `Authorization: Bearer <access_token>` en las operaciones protegidas.\n\n'
+        'Guías: `API_SWAGGER.md`, `SPRINT3.md`.'
+    ),
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'TAGS': [
+        {'name': 'Autenticación', 'description': 'Registro, login JWT y refresh de tokens.'},
+        {'name': 'Tareas', 'description': 'Listado, creación, edición y borrado de tareas (y subtareas vía `parent`).'},
+        {
+            'name': 'Carga diaria',
+            'description': 'Límite de minutos por día, resumen, simulación, recomendaciones y reprogramación.',
+        },
+    ],
+    'COMPONENT_SPLIT_REQUEST': True,
 }
 
 # Internationalization

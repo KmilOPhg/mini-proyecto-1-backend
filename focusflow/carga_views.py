@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,6 +16,18 @@ from .carga_service import (
 )
 from .models import Tarea
 from .serializer import PerfilCargaSerializer
+from .swagger_serializers import (
+    MensajeErrorSerializer,
+    MensajeSimpleSerializer,
+    PerfilCargaResponseSerializer,
+    RecomendacionesRequestSerializer,
+    RecomendacionesResponseSerializer,
+    ReprogramarRequestSerializer,
+    ReprogramarResponseSerializer,
+    ResumenDiaSerializer,
+    ValidarCargaRequestSerializer,
+    ValidarCargaResponseSerializer,
+)
 
 
 def _parse_fecha(s: str):
@@ -23,9 +37,27 @@ def _parse_fecha(s: str):
         return None
 
 
+_FECHA_PARAM = OpenApiParameter(
+    name="fecha",
+    type=OpenApiTypes.DATE,
+    location=OpenApiParameter.PATH,
+    required=True,
+    description="Día calendario **YYYY-MM-DD** (según configuración `TIME_ZONE` del proyecto).",
+)
+
+
 class VistaCargaConfig(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        tags=["Carga diaria"],
+        summary="Obtener configuración de carga diaria",
+        description=(
+            "Devuelve el **límite en minutos por día** y el **porcentaje de umbral de aviso**. "
+            "Crea `PerfilCarga` si no existe."
+        ),
+        responses={200: PerfilCargaResponseSerializer},
+    )
     def get(self, request):
         perfil = get_or_create_perfil(request.user)
         return Response(
@@ -36,6 +68,15 @@ class VistaCargaConfig(APIView):
             }
         )
 
+    @extend_schema(
+        tags=["Carga diaria"],
+        summary="Actualizar configuración de carga diaria",
+        description=(
+            "Límite entre **30 y 360 minutos** (6 h máx.). Umbral de aviso típico **50–100**."
+        ),
+        request=PerfilCargaSerializer,
+        responses={200: PerfilCargaResponseSerializer, 400: MensajeErrorSerializer},
+    )
     def patch(self, request):
         perfil = get_or_create_perfil(request.user)
         ser = PerfilCargaSerializer(perfil, data=request.data, partial=True)
@@ -57,6 +98,19 @@ class VistaCargaConfig(APIView):
 class DiaResumenView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        tags=["Carga diaria"],
+        summary="Resumen de carga del día",
+        description=(
+            "Total de minutos planificados para tareas **raíz** no completadas cuya fecha efectiva de plan "
+            "coincide con **fecha**; estado **ok / warning / overload**."
+        ),
+        parameters=[_FECHA_PARAM],
+        responses={
+            200: ResumenDiaSerializer,
+            400: MensajeSimpleSerializer,
+        },
+    )
     def get(self, request, fecha):
         day = _parse_fecha(fecha)
         if not day:
@@ -70,6 +124,20 @@ class DiaResumenView(APIView):
 class DiaValidarCargaView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        tags=["Carga diaria"],
+        summary="Simular / validar carga del día",
+        description=(
+            "Lista **cambios** opcionales por `tarea_id` (tarea existente) o sin id para una fila nueva "
+            "propuesta (**duracion_estimada_minutos** + **fecha_planificada**)."
+        ),
+        parameters=[_FECHA_PARAM],
+        request=ValidarCargaRequestSerializer,
+        responses={
+            200: ValidarCargaResponseSerializer,
+            400: MensajeSimpleSerializer,
+        },
+    )
     def post(self, request, fecha):
         day = _parse_fecha(fecha)
         if not day:
@@ -89,6 +157,20 @@ class DiaValidarCargaView(APIView):
 class DiaRecomendacionesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        tags=["Carga diaria"],
+        summary="Generar recomendaciones de reprogramación",
+        description=(
+            "Heurística por prioridad, tipo (examenes al final), margen de entrega y duración. "
+            "**ventana_dias** y **max_movimientos** acotan la búsqueda."
+        ),
+        parameters=[_FECHA_PARAM],
+        request=RecomendacionesRequestSerializer,
+        responses={
+            200: RecomendacionesResponseSerializer,
+            400: MensajeSimpleSerializer,
+        },
+    )
     def post(self, request, fecha):
         day = _parse_fecha(fecha)
         if not day:
@@ -109,6 +191,20 @@ class DiaRecomendacionesView(APIView):
 class DiaReprogramarView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
+    @extend_schema(
+        tags=["Carga diaria"],
+        summary="Aplicar reprogramaciones (fecha planificada)",
+        description=(
+            "Actualiza **fecha_planificada** de cada tarea raíz indicada. Solo tareas del usuario autenticado."
+        ),
+        parameters=[_FECHA_PARAM],
+        request=ReprogramarRequestSerializer,
+        responses={
+            200: ReprogramarResponseSerializer,
+            400: MensajeSimpleSerializer,
+            404: MensajeSimpleSerializer,
+        },
+    )
     def post(self, request, fecha):
         day = _parse_fecha(fecha)
         if not day:

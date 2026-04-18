@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .carga_constants import (
@@ -66,6 +67,7 @@ class TareaSerializer(serializers.ModelSerializer):
 
     # subtareas = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
 
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_subtareas(self, obj):
         # Buscamos las tareas cuyo padre sea la tarea actual
         hijos = Tarea.objects.filter(parent=obj)

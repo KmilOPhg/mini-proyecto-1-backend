@@ -1,17 +1,44 @@
 from rest_framework import viewsets, status, generics, permissions
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from focusflow.serializer import TareaSerializer, RegistroSerializer, FocusflowTokenObtainPairSerializer
 from .models import Tarea
 from .carga_service import build_resumen, fecha_efectiva_plan
+from .swagger_serializers import (
+    EliminarTareaResponseSerializer,
+    JwtLoginResponseSerializer,
+    MensajeErrorSerializer,
+    RegistroOkSerializer,
+    TareaCreateResponseSerializer,
+)
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 
 
+@extend_schema(
+    tags=["Autenticación"],
+    summary="Iniciar sesión (JWT)",
+    description=(
+        "Credenciales **username** / **password**. Respuesta incluye **access**, **refresh** y "
+        "**nombre_mostrar** para mostrar en la UI."
+    ),
+    responses={200: JwtLoginResponseSerializer},
+)
 class FocusflowTokenObtainPairView(TokenObtainPairView):
     serializer_class = FocusflowTokenObtainPairSerializer
+
+
+@extend_schema(
+    tags=["Autenticación"],
+    summary="Renovar token de acceso",
+    description="Cuerpo JSON estándar de SimpleJWT con el campo **refresh**.",
+)
+class FocusflowTokenRefreshView(TokenRefreshView):
+    pass
 
 #VISTA LOGIN
 class VistaLoginPersonalizada(APIView):
@@ -54,6 +81,12 @@ class VistaLoginPersonalizada(APIView):
         }, status=status.HTTP_200_OK)
 
 # VISTA DE REGISTRO
+@extend_schema(
+    tags=["Autenticación"],
+    summary="Registrar nuevo usuario",
+    auth=[],
+    responses={201: RegistroOkSerializer, 400: MensajeErrorSerializer},
+)
 class VistaRegistro(generics.CreateAPIView):
     serializer_class = RegistroSerializer
     permission_classes = [permissions.AllowAny]
@@ -96,6 +129,81 @@ def _payload_carga_tras_tarea(user, tarea):
 
 
 # VISTA TAREAS PROTEGIDA
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Tareas"],
+        summary="Listar tareas raíz",
+        description=(
+            "Devuelve solo tareas **sin padre** del usuario autenticado, cada una con **subtareas** anidadas "
+            "(serialización recursiva)."
+        ),
+    ),
+    retrieve=extend_schema(
+        tags=["Tareas"],
+        summary="Obtener una tarea",
+        parameters=[
+            OpenApiParameter(
+                "id",
+                OpenApiTypes.INT,
+                OpenApiParameter.PATH,
+                required=True,
+                description="Identificador de la tarea",
+            ),
+        ],
+    ),
+    create=extend_schema(
+        tags=["Tareas"],
+        summary="Crear tarea",
+        description=(
+            "`usuario` se asigna automáticamente. Si la tarea es raíz, la respuesta puede incluir "
+            "**resumen_dia** y **carga_alerta** según la carga del día planificado."
+        ),
+        responses={201: TareaCreateResponseSerializer, 400: MensajeErrorSerializer},
+    ),
+    update=extend_schema(
+        tags=["Tareas"],
+        summary="Actualizar tarea (PUT)",
+        parameters=[
+            OpenApiParameter(
+                "id",
+                OpenApiTypes.INT,
+                OpenApiParameter.PATH,
+                required=True,
+                description="Identificador de la tarea",
+            ),
+        ],
+        responses={200: TareaCreateResponseSerializer, 400: MensajeErrorSerializer},
+    ),
+    partial_update=extend_schema(
+        tags=["Tareas"],
+        summary="Actualizar tarea (PATCH)",
+        parameters=[
+            OpenApiParameter(
+                "id",
+                OpenApiTypes.INT,
+                OpenApiParameter.PATH,
+                required=True,
+                description="Identificador de la tarea",
+            ),
+        ],
+        responses={200: TareaCreateResponseSerializer, 400: MensajeErrorSerializer},
+    ),
+    destroy=extend_schema(
+        tags=["Tareas"],
+        summary="Eliminar tarea",
+        description="Elimina la tarea y subtareas en cascada (FK).",
+        parameters=[
+            OpenApiParameter(
+                "id",
+                OpenApiTypes.INT,
+                OpenApiParameter.PATH,
+                required=True,
+                description="Identificador de la tarea",
+            ),
+        ],
+        responses={200: EliminarTareaResponseSerializer},
+    ),
+)
 class VistaTarea(viewsets.ModelViewSet):
     serializer_class = TareaSerializer
     permission_classes = [permissions.IsAuthenticated] # Obligatorio estar logueado
