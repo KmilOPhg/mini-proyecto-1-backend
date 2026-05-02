@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .carga_service import (
+    analizar_dia,
     aplicar_reprogramaciones,
     build_resumen,
     generar_recomendaciones,
@@ -17,6 +18,7 @@ from .carga_service import (
 from .models import Tarea
 from .serializer import PerfilCargaSerializer
 from .swagger_serializers import (
+    AnalisisDiaResponseSerializer,
     MensajeErrorSerializer,
     MensajeSimpleSerializer,
     PerfilCargaResponseSerializer,
@@ -186,6 +188,54 @@ class DiaRecomendacionesView(APIView):
             request.user, day, ventana_dias=ventana, max_movimientos=max_mov
         )
         return Response(data)
+
+
+class DiaAnalisisView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(
+        tags=["Carga diaria"],
+        summary="Análisis integral del día (sin auto-modificar tareas)",
+        description=(
+            "Devuelve el **nivel de carga** (`vacio | subcarga | ok | warning | overload`), métricas en "
+            "horas y minutos, las tareas con **mayor impacto mental** (carga 4-5) y un listado de "
+            "**recomendaciones agrupadas** por tipo:\n\n"
+            "- `priorizar`: tareas vencidas o con entrega hoy y prioridad alta.\n"
+            "- `cambiar_horario`: alta carga mental con entrega cercana (mover a la mejor franja).\n"
+            "- `posponer`: solo en sobrecarga, baja prioridad sin entrega inmediata.\n"
+            "- `reprogramar`: solo en sobrecarga, mover a otro día con cupo.\n"
+            "- `opcional`: en subcarga, adelantar tareas pendientes sin pasar el límite.\n\n"
+            "El sistema **no modifica** tareas: cada recomendación incluye un motivo explicativo y el "
+            "usuario decide manualmente. Las tareas tampoco se subdividen."
+        ),
+        parameters=[
+            _FECHA_PARAM,
+            OpenApiParameter(
+                "ventana_dias",
+                OpenApiTypes.INT,
+                OpenApiParameter.QUERY,
+                required=False,
+                description="Días hacia adelante a considerar para reprogramar/adelantar (1–60). Por defecto 14.",
+            ),
+        ],
+        responses={
+            200: AnalisisDiaResponseSerializer,
+            400: MensajeSimpleSerializer,
+        },
+    )
+    def get(self, request, fecha):
+        day = _parse_fecha(fecha)
+        if not day:
+            return Response(
+                {"mensaje": "fecha debe ser YYYY-MM-DD"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            ventana = int(request.query_params.get("ventana_dias") or 14)
+        except (TypeError, ValueError):
+            ventana = 14
+        ventana = max(1, min(ventana, 60))
+        return Response(analizar_dia(request.user, day, ventana_dias=ventana))
 
 
 class DiaReprogramarView(APIView):

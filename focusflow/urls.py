@@ -9,6 +9,7 @@ from .views import (
     VistaRegistro,
 )
 from .carga_views import (
+    DiaAnalisisView,
     DiaRecomendacionesView,
     DiaReprogramarView,
     DiaResumenView,
@@ -33,6 +34,11 @@ urlpatterns = [
         "api/dias/<str:fecha>/recomendaciones/",
         DiaRecomendacionesView.as_view(),
         name="dia-recomendaciones",
+    ),
+    path(
+        "api/dias/<str:fecha>/analisis/",
+        DiaAnalisisView.as_view(),
+        name="dia-analisis",
     ),
     path(
         "api/dias/<str:fecha>/reprogramar/",

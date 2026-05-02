@@ -155,3 +155,62 @@ class PosponerTareaResponseSerializer(serializers.Serializer):
 
     mensaje = serializers.CharField()
     data = serializers.DictField()
+
+
+class TareaAnalisisItemSerializer(serializers.Serializer):
+    """Tarea enriquecida con flags usados por el análisis del día."""
+
+    id = serializers.IntegerField()
+    nombre = serializers.CharField()
+    duracion_estimada_minutos = serializers.IntegerField()
+    duracion_estimada_horas = serializers.FloatField()
+    prioridad = serializers.CharField()
+    carga_mental = serializers.IntegerField(min_value=0, max_value=5)
+    tipo_tarea = serializers.CharField()
+    curso = serializers.CharField(allow_null=True)
+    fecha_entrega = serializers.CharField(allow_null=True)
+    fecha_planificada = serializers.CharField(allow_null=True)
+    vencida = serializers.BooleanField()
+    vence_hoy = serializers.BooleanField()
+    vence_pronto = serializers.BooleanField()
+
+
+class RecomendacionAnalisisSerializer(serializers.Serializer):
+    """Cada item de ``recomendaciones`` en el análisis del día."""
+
+    tipo = serializers.ChoiceField(
+        choices=["priorizar", "cambiar_horario", "posponer", "reprogramar", "opcional"],
+        help_text="Categoría de la recomendación.",
+    )
+    tarea_id = serializers.IntegerField()
+    nombre = serializers.CharField()
+    duracion_estimada_minutos = serializers.IntegerField()
+    prioridad = serializers.CharField()
+    carga_mental = serializers.IntegerField(min_value=0, max_value=5)
+    motivo = serializers.CharField(help_text="Explicación breve del motivo.")
+    fecha_sugerida = serializers.CharField(required=False, allow_null=True)
+    fecha_actual = serializers.CharField(required=False, allow_null=True)
+    impacto_entrega = serializers.CharField(required=False, allow_null=True)
+
+
+class AnalisisDiaResponseSerializer(serializers.Serializer):
+    """Respuesta de ``GET /api/dias/<fecha>/analisis/``."""
+
+    fecha = serializers.CharField(help_text="YYYY-MM-DD")
+    limite_minutos = serializers.IntegerField()
+    limite_horas = serializers.FloatField()
+    minimo_recomendado_minutos = serializers.IntegerField()
+    minimo_recomendado_horas = serializers.FloatField()
+    total_minutos = serializers.IntegerField()
+    total_horas = serializers.FloatField()
+    minutos_disponibles = serializers.IntegerField()
+    exceso_minutos = serializers.IntegerField()
+    deficit_minutos = serializers.IntegerField()
+    pct_uso = serializers.FloatField()
+    nivel_carga = serializers.ChoiceField(
+        choices=["vacio", "subcarga", "ok", "warning", "overload"],
+    )
+    descripcion_estado = serializers.CharField()
+    tareas = TareaAnalisisItemSerializer(many=True)
+    tareas_alto_impacto_mental = TareaAnalisisItemSerializer(many=True)
+    recomendaciones = RecomendacionAnalisisSerializer(many=True)
