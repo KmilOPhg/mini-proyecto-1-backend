@@ -1,4 +1,5 @@
 from rest_framework import viewsets, status, generics, permissions
+from rest_framework.decorators import action
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from focusflow.serializer import TareaSerializer, RegistroSerializer, FocusflowTokenObtainPairSerializer
@@ -8,6 +9,9 @@ from .swagger_serializers import (
     EliminarTareaResponseSerializer,
     JwtLoginResponseSerializer,
     MensajeErrorSerializer,
+    MensajeSimpleSerializer,
+    PosponerTareaRequestSerializer,
+    PosponerTareaResponseSerializer,
     RegistroOkSerializer,
     TareaCreateResponseSerializer,
 )
@@ -17,6 +21,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
+from django.utils import timezone
 
 
 @extend_schema(
@@ -276,3 +281,90 @@ class VistaTarea(viewsets.ModelViewSet):
         return Response({
             "mensaje": f"La tarea '{nombre}' ha sido eliminada con éxito."
         }, status=status.HTTP_200_OK) # Cambiamos a 200 para que el cuerpo del mensaje sea visible
+
+    # Marcar una tarea (raíz o subtarea) como pospuesta con una nota opcional
+    @extend_schema(
+        tags=["Tareas"],
+        summary="Posponer tarea (con nota opcional)",
+        description=(
+            "Marca la tarea como **pospuesta** y guarda una **nota** libre opcional (máx. 500 caracteres). "
+            "No se puede posponer una tarea ya **completada**. Si ya estaba pospuesta, la nota y la "
+            "fecha de posposición se sobrescriben."
+        ),
+        request=PosponerTareaRequestSerializer,
+        responses={
+            200: PosponerTareaResponseSerializer,
+            400: MensajeSimpleSerializer,
+            404: MensajeSimpleSerializer,
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="posponer")
+    def posponer(self, request, pk=None):
+        # La tarea debe pertenecer al usuario autenticado (filtrado en get_queryset)
+        instance = self.get_object()
+
+        # No tiene sentido posponer una tarea completada
+        if instance.completada:
+            return Response(
+                {"mensaje": "No se puede posponer una tarea ya completada."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validar nota: opcional, máximo 500 caracteres
+        nota_raw = request.data.get("nota")
+        nota = (nota_raw or "").strip()
+        if len(nota) > 500:
+            return Response(
+                {"mensaje": "La nota no puede tener más de 500 caracteres."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Persistir la posposición
+        instance.pospuesta = True
+        instance.nota_posponer = nota or None
+        instance.pospuesta_en = timezone.now()
+        instance.save(update_fields=["pospuesta", "nota_posponer", "pospuesta_en"])
+
+        serializer = self.get_serializer(instance)
+        return Response(
+            {"mensaje": "Tarea pospuesta", "data": serializer.data},
+            status=status.HTTP_200_OK,
+        )
+
+    # Quitar el estado pospuesta de la tarea (vuelve al flujo normal)
+    @extend_schema(
+        tags=["Tareas"],
+        summary="Reanudar tarea pospuesta",
+        description=(
+            "Quita el estado **pospuesta** de la tarea, limpia la **nota** y la marca de tiempo. "
+            "La tarea vuelve a aparecer en los flujos normales (por ejemplo `/hoy`)."
+        ),
+        request=None,
+        responses={
+            200: PosponerTareaResponseSerializer,
+            400: MensajeSimpleSerializer,
+            404: MensajeSimpleSerializer,
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="reanudar")
+    def reanudar(self, request, pk=None):
+        instance = self.get_object()
+
+        # Si nunca estuvo pospuesta, no hacemos nada
+        if not instance.pospuesta:
+            return Response(
+                {"mensaje": "La tarea no estaba pospuesta."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Limpiar el estado y los campos asociados
+        instance.pospuesta = False
+        instance.nota_posponer = None
+        instance.pospuesta_en = None
+        instance.save(update_fields=["pospuesta", "nota_posponer", "pospuesta_en"])
+
+        serializer = self.get_serializer(instance)
+        return Response(
+            {"mensaje": "Tarea reanudada", "data": serializer.data},
+            status=status.HTTP_200_OK,
+        )

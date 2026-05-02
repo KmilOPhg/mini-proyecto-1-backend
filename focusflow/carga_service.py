@@ -35,8 +35,13 @@ def fecha_efectiva_plan(tarea: Tarea) -> date:
 
 
 def tareas_raiz_dia(user: User, day: date):
-    """Tareas de primer nivel no completadas cuya fecha de plan efectiva coincide con day."""
-    qs = Tarea.objects.filter(usuario=user, parent__isnull=True, completada=False)
+    """Tareas raíz no completadas ni pospuestas cuya fecha de plan efectiva coincide con ``day``."""
+    qs = Tarea.objects.filter(
+        usuario=user,
+        parent__isnull=True,
+        completada=False,
+        pospuesta=False,
+    )
     return [t for t in qs if fecha_efectiva_plan(t) == day]
 
 
@@ -260,7 +265,7 @@ def simular_carga(
                 return int(d)
         return int(t.duracion_estimada_minutos or 0)
 
-    qs = Tarea.objects.filter(usuario=user, parent__isnull=True, completada=False)
+    qs = Tarea.objects.filter(usuario=user, parent__isnull=True, completada=False, pospuesta=False)
     total = extra_nuevo_en_dia
     for t in qs:
         if efectivo_sim(t) == day:

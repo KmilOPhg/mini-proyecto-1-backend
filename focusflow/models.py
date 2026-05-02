@@ -99,6 +99,23 @@ class Tarea(models.Model):
         help_text="ID de la tarea padre"
     )
 
+    # Posposición de tarea (no es completada; queda fuera del flujo de hoy)
+    pospuesta = models.BooleanField(
+        default=False,
+        help_text="True si la tarea está pospuesta y no debe trabajarse ahora.",
+    )
+    nota_posponer = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="Nota libre con el motivo o detalle de la posposición (máx. 500 caracteres).",
+    )
+    pospuesta_en = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha y hora en la que se pospuso por última vez.",
+    )
+
     # Relacionamos la tarea con un usuario
     usuario = models.ForeignKey(
         User,

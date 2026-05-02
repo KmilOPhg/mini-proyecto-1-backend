@@ -137,3 +137,21 @@ class EliminarTareaResponseSerializer(serializers.Serializer):
 
 class MensajeSimpleSerializer(serializers.Serializer):
     mensaje = serializers.CharField()
+
+
+class PosponerTareaRequestSerializer(serializers.Serializer):
+    """Cuerpo aceptado por POST /api/tareas/<id>/posponer/."""
+
+    nota = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=500,
+        help_text="Texto libre con el motivo o detalle de la posposición (opcional, máx. 500 caracteres).",
+    )
+
+
+class PosponerTareaResponseSerializer(serializers.Serializer):
+    """Respuesta de posponer / reanudar una tarea."""
+
+    mensaje = serializers.CharField()
+    data = serializers.DictField()
