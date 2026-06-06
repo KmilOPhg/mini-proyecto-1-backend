@@ -1,5 +1,5 @@
 import os
-from pathlib import Path
+import sys
 from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
@@ -172,3 +172,12 @@ STATICFILES_DIRS = [
 ]
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+if "test" in sys.argv:
+    SECRET_KEY = SECRET_KEY or "test-secret-key-only-for-pytest"
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
