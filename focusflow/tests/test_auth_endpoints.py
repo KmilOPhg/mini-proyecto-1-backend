@@ -55,6 +55,59 @@ class RegistroEndpointTests(FocusflowAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_registro_email_duplicado(self):
+        User.objects.create_user(
+            username="otro",
+            email="dup@example.com",
+            password="SecurePass123!",
+        )
+
+        response = self.client.post(
+            self.url("/registro/"),
+            {
+                "username": "nuevo3",
+                "password": "SecurePass123!",
+                "password_confirm": "SecurePass123!",
+                "email": "dup@example.com",
+                "nombre": "Nuevo",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data["errores"])
+
+    def test_registro_usuario_muy_corto(self):
+        response = self.client.post(
+            self.url("/registro/"),
+            {
+                "username": "ab",
+                "password": "SecurePass123!",
+                "password_confirm": "SecurePass123!",
+                "nombre": "Nuevo",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("username", response.data["errores"])
+
+    def test_registro_password_debil(self):
+        response = self.client.post(
+            self.url("/registro/"),
+            {
+                "username": "nuevo4",
+                "password": "12345678",
+                "password_confirm": "12345678",
+                "email": "nuevo4@example.com",
+                "nombre": "Nuevo",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("password", response.data["errores"])
+
 
 class LoginEndpointTests(FocusflowAPITestCase):
     def test_login_exitoso(self):

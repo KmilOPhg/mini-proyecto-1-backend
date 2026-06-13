@@ -9,7 +9,12 @@ from .carga_constants import (
 )
 from .models import Tarea, PerfilCarga
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 import re
+
+NOMBRE_APELLIDO_RE = re.compile(r"^[\w\s'\-àáâãäåèéêëìíîïòóôõöùúûüñÑÀ-ÖØ-öø-ÿ]+$", re.UNICODE)
+USERNAME_RE = re.compile(r"^[\w.-]+$")
 
 
 class FocusflowTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -86,27 +91,74 @@ class RegistroSerializer(serializers.ModelSerializer):
         fields = ['username', 'password', 'password_confirm', 'email', 'nombre', 'apellido']
 
     def validate_username(self, value):
-        if not re.match(r'^[\w.-]+$', value):
+        username = (value or "").strip()
+        if len(username) < 3:
+            raise serializers.ValidationError("El usuario debe tener al menos 3 caracteres.")
+        if len(username) > 30:
+            raise serializers.ValidationError("El usuario no puede superar 30 caracteres.")
+        if not USERNAME_RE.match(username):
             raise serializers.ValidationError(
                 "El nombre de usuario no debe contener espacios ni caracteres especiales."
             )
-        if User.objects.filter(username=value).exists():
+        if User.objects.filter(username=username).exists():
             raise serializers.ValidationError("Este nombre de usuario ya está en uso.")
-        return value
+        return username
+
+    def validate_email(self, value):
+        email = (value or "").strip().lower()
+        if not email:
+            raise serializers.ValidationError("El email es obligatorio.")
+        if len(email) > 254:
+            raise serializers.ValidationError("El email es demasiado largo.")
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("Este correo ya está registrado.")
+        return email
 
     def validate_nombre(self, value):
-        if not (value or "").strip():
+        nombre = (value or "").strip()
+        if not nombre:
             raise serializers.ValidationError("El nombre es obligatorio.")
-        return value.strip()
+        if len(nombre) < 2:
+            raise serializers.ValidationError("El nombre debe tener al menos 2 caracteres.")
+        if len(nombre) > 150:
+            raise serializers.ValidationError("El nombre no puede superar 150 caracteres.")
+        if not NOMBRE_APELLIDO_RE.match(nombre):
+            raise serializers.ValidationError(
+                "El nombre solo puede contener letras, espacios, guiones o apóstrofos."
+            )
+        return nombre
 
     def validate_apellido(self, value):
-        return (value or "").strip()
+        apellido = (value or "").strip()
+        if not apellido:
+            return ""
+        if len(apellido) < 2:
+            raise serializers.ValidationError("El apellido debe tener al menos 2 caracteres.")
+        if len(apellido) > 150:
+            raise serializers.ValidationError("El apellido no puede superar 150 caracteres.")
+        if not NOMBRE_APELLIDO_RE.match(apellido):
+            raise serializers.ValidationError(
+                "El apellido solo puede contener letras, espacios, guiones o apóstrofos."
+            )
+        return apellido
 
     def validate(self, attrs):
-        if attrs['password'] != attrs['password_confirm']:
+        if attrs["password"] != attrs["password_confirm"]:
             raise serializers.ValidationError({
-                'password_confirm': 'Las contraseñas no coinciden.'
+                "password_confirm": "Las contraseñas no coinciden."
             })
+
+        user_probe = User(
+            username=attrs.get("username", ""),
+            email=attrs.get("email", ""),
+            first_name=attrs.get("nombre", ""),
+            last_name=attrs.get("apellido", "") or "",
+        )
+        try:
+            validate_password(attrs["password"], user=user_probe)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"password": list(exc.messages)}) from exc
+
         return attrs
 
     def create(self, validated_data):
